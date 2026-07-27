@@ -1,0 +1,60 @@
+%% Music Recommender Simulation - System Architecture
+%% Data flow: input -> understand -> retrieve -> generate -> guardrails -> output
+%% Humans/testing verification points are shown in the "Humans & Testing" subgraph.
+flowchart TD
+    %% ---------------- Input ----------------
+    subgraph input["Input"]
+        U["User free-text request<br/>e.g. 'upbeat late-night drive, nothing aggressive'"]
+        M["Manual profile<br/>genre / mood / energy / valence / acoustic"]
+    end
+
+    UI["Streamlit UI<br/>src/app.py"]
+    U --> UI
+    M --> UI
+
+    %% ---------------- Knowledge base ----------------
+    DB[("songs.csv<br/>18-song catalog<br/>= knowledge base")]
+
+    %% ---------------- RAG pipeline (the agent) ----------------
+    subgraph rag["RAG pipeline - src/rag.py"]
+        P["UNDERSTAND (agent)<br/>Claude parses request into a<br/>UserProfile using catalog-valid enums"]
+        R["RETRIEVE (retriever)<br/>score_song / recommend_songs<br/>deterministic scorer ranks the catalog"]
+        G["GENERATE (agent)<br/>Claude writes a grounded recommendation<br/>using ONLY the retrieved songs"]
+    end
+
+    UI -->|"free-text path"| P
+    UI -->|"manual path"| R
+    P -->|"structured profile"| R
+    DB --> R
+    R -->|"top-k candidate songs + scores"| G
+
+    %% ---------------- Guardrails & reliability ----------------
+    subgraph guard["Guardrails & Reliability"]
+        FB{"API key present<br/>and API calls succeed?"}
+        DET["Deterministic fallback<br/>heuristic profile + scorer<br/>(runs with no key / on API error)"]
+        HALL["Anti-hallucination check (evaluator)<br/>any named catalog song<br/>must be in the retrieved set"]
+        LOG["Stage logging<br/>query, profile, retrieved, token usage"]
+    end
+
+    P -.-> FB
+    G -.-> FB
+    FB -->|"no"| DET
+    R --> LOG
+    G --> HALL
+    DET --> OUT
+    HALL --> OUT
+
+    %% ---------------- Output ----------------
+    OUT["Output<br/>recommendation + transparency panel<br/>+ deterministic-vs-RAG comparison"]
+    OUT --> UI
+
+    %% ---------------- Humans & testing ----------------
+    subgraph verify["Humans & Testing"]
+        H["Human review<br/>sets API key, reads recommendation,<br/>inspects parsed profile & retrieved songs"]
+        T["Automated tests (tester)<br/>pytest with a mocked Anthropic client<br/>tests/test_rag.py + tests/test_recommender.py"]
+    end
+
+    OUT --> H
+    T -.->|"verifies scoring"| R
+    T -.->|"verifies pipeline, fallback & guardrail"| G
+    T -.->|"verifies guardrail"| HALL
