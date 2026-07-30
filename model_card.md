@@ -51,7 +51,9 @@ Prompts:
 - Did you add or remove data  
 - Are there parts of musical taste missing in the dataset  
 
-The catalog has 18 songs. There are 14 different genres, like pop, lofi, rock, jazz, and hip hop. There are also 14 different moods, like happy, chill, intense, and melancholic. I added a few songs to the original dataset. Most moods and genres only show up on one song each. There's also a gap in energy levels: no songs sit between 0.55 and 0.74 energy. So listeners who want something in the middle don't have many good options.
+The catalog now has 30 songs, expanded from an original 18. There are 15 different genres, like pop, lofi, rock, jazz, and hip hop, and 15 different moods, like happy, chill, intense, and melancholic. I deliberately added the 12 new songs to fix two problems the original dataset had: most genres and moods appeared on only one song each, and there was a gap in energy levels with nothing between 0.55 and 0.74. After the expansion, only one genre (`classical`) still has a single song, the mid-energy range is well covered, and most moods have at least two songs — though a few moods (`aggressive`, `bittersweet`, `melancholic`, `romantic`) are still represented by a single song, so some niche tastes remain thin.
+
+*Note: the experiments and limitations described in Sections 6 and 7 were run on the original 18-song catalog, before this expansion, so their specific counts (e.g. "11 of 14 moods on a single song") describe that earlier version.*
 
 ---
 
@@ -113,7 +115,9 @@ Prompts:
 - Improving diversity among the top results  
 - Handling more complex user tastes  
 
-I'd add fuzzy matching so words like "sad" and "melancholic" count as close enough. I'd give partial credit for similar genres, like "pop" and "indie pop." I'd add more songs, especially for the moods and genres that only have one song right now. I'd also fill in that gap in medium-energy songs. I'd lower the mood and genre bonus a little so energy and valence matter more too. And I'd tell the listener when their genre or mood doesn't match anything in the catalog, instead of silently scoring it as zero.
+**Already improved since the first version:** I expanded the catalog from 18 to 30 songs, specifically adding second entries for genres and moods that previously had only one, and filling the medium-energy gap (0.55–0.74) that had left mid-tempo listeners with few options.
+
+**Still on my list:** I'd add fuzzy matching so words like "sad" and "melancholic" count as close enough. I'd give partial credit for similar genres, like "pop" and "indie pop." I'd lower the mood and genre bonus a little so energy and valence matter more too. And I'd tell the listener when their genre or mood doesn't match anything in the catalog, instead of silently scoring it as zero.
 
 ---
 
@@ -137,14 +141,14 @@ After the core project, I added a **Retrieval-Augmented Generation (RAG)** featu
 
 **How it works now.** A listener types a request in plain language. The system runs three stages:
 
-1. **Understand.** Claude (`claude-sonnet-5`) reads the free text and produces a structured taste profile, but it's constrained to choose only from the genres and moods that actually exist in the catalog. This is what fixes the exact-match problem: "high-energy pop" now maps to `pop`, and "sad" maps to `melancholic`.
+1. **Understand.** Gemini (`gemini-3.6-flash`) reads the free text and produces a structured taste profile, but it's constrained to choose only from the genres and moods that actually exist in the catalog. This is what fixes the exact-match problem: "high-energy pop" now maps to `pop`, and "sad" maps to `melancholic`.
 2. **Retrieve.** That profile is handed to my *original* scoring function (the same 3/2/2/2/1 algorithm). My work still does the ranking — the LLM only translates the request into terms my scorer understands.
-3. **Generate.** Claude writes a short, plain-language recommendation, but it may only mention songs that were retrieved, and it has to justify each pick using that song's real attributes.
+3. **Generate.** Gemini writes a short, plain-language recommendation, but it may only mention songs that were retrieved, and it has to justify each pick using that song's real attributes.
 
 **How this addresses the documented bias.** The exact-string penalty from Section 6 is gone for natural-language input, because the understanding step normalizes phrasing to catalog vocabulary before scoring. The "silent fallback to energy" problem from Section 7 is also softened: the generation step has to *explain* why a song was picked, so a mismatch is now visible in the text instead of hidden.
 
 **New biases and limitations the RAG layer introduces.**
 - **The catalog is still tiny and uneven.** RAG maps words better, but it can't invent songs. A niche mood with one catalog song still has one option — the underlying data imbalance is unchanged.
-- **The LLM is a new source of bias.** Which catalog word Claude maps a phrase to is now a model judgment, not a rule I can fully inspect. "Chill" might map to `chill`, `relaxed`, or `peaceful` depending on the model.
+- **The LLM is a new source of bias.** Which catalog word Gemini maps a phrase to is now a model judgment, not a rule I can fully inspect. "Chill" might map to `chill`, `relaxed`, or `peaceful` depending on the model.
 - **Cost, latency, and reproducibility.** RAG needs an API key and network, and its wording varies run to run. To keep the project reproducible, I built a guardrail: with no key or on any API error, the app falls back to the pure deterministic recommender, and all tests mock the model so they never call the network.
 - **Grounding is enforced but not perfect.** I check that any *catalog* song named in the output was actually retrieved, but a fully invented title can't be caught by that check alone — the prompt is the main defense there.

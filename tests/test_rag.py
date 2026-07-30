@@ -1,6 +1,6 @@
 """Tests for the RAG layer.
 
-The Anthropic client is faked, so these tests need no API key and make no
+The Gemini (google-genai) client is faked, so these tests need no API key and make no
 network calls. They cover the happy path (parse -> retrieve -> generate), the
 no-key fallback, the API-error fallback, the anti-hallucination guardrail, and
 the keyword heuristic.
@@ -31,43 +31,38 @@ def songs():
 
 
 # --------------------------------------------------------------------------- #
-# Fake Anthropic client
+# Fake Gemini (google-genai) client
 # --------------------------------------------------------------------------- #
-class _FakeBlock:
-    def __init__(self, text):
-        self.type = "text"
-        self.text = text
-
-
 class _FakeUsage:
-    input_tokens = 12
-    output_tokens = 7
+    prompt_token_count = 12
+    candidates_token_count = 7
 
 
 class _FakeResponse:
     def __init__(self, text):
-        self.content = [_FakeBlock(text)]
-        self.usage = _FakeUsage()
+        self.text = text
+        self.usage_metadata = _FakeUsage()
 
 
-class _FakeMessages:
+class _FakeModels:
     def __init__(self, parse_text, gen_text, fail=False):
         self._parse_text = parse_text
         self._gen_text = gen_text
         self._fail = fail
 
-    def create(self, **kwargs):
+    def generate_content(self, **kwargs):
         if self._fail:
             raise RuntimeError("simulated API error")
-        # The parse call is the one that requests structured output.
-        if "output_config" in kwargs:
+        # The parse call is the one that requests structured JSON output.
+        config = kwargs.get("config", {})
+        if "response_json_schema" in config:
             return _FakeResponse(self._parse_text)
         return _FakeResponse(self._gen_text)
 
 
 class FakeClient:
     def __init__(self, parse_text, gen_text, fail=False):
-        self.messages = _FakeMessages(parse_text, gen_text, fail=fail)
+        self.models = _FakeModels(parse_text, gen_text, fail=fail)
 
 
 def _profile_json(**overrides):
@@ -125,7 +120,8 @@ def test_rag_happy_path_uses_llm(songs):
 # recommend_with_rag - fallbacks
 # --------------------------------------------------------------------------- #
 def test_rag_falls_back_without_api_key(songs, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     result = recommend_with_rag("chill lofi", songs, k=3)  # no client, no key
     assert result.used_fallback is True
     assert result.profile_source == "heuristic"

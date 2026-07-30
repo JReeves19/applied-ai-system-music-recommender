@@ -22,9 +22,14 @@ plan before writing any code.
   I was thinking we could implement a RAG feature as our improvement, and then
   add a Streamlit UI. Let's brainstorm and plan before writing any code."
 - After it proposed a plan and asked clarifying questions, I chose: reuse my
-  existing scorer as the retriever, default to `claude-sonnet-5`, and unify the
-  duplicated OOP/functional code paths.
+  existing scorer as the retriever, and unify the duplicated OOP/functional
+  code paths.
 - "Yes, let's proceed with this."
+- "Wire up a quick .env loader." (so the API key loads from a `.env` file)
+- "I have a gemini api key. How can I use gemini in this project instead of
+  claude?" — I chose the full-replacement option, so the agent swapped the SDK
+  from `anthropic` to `google-genai` and defaulted the model to
+  `gemini-2.5-flash`.
 
 **What did the agent generate or change?**
 
@@ -37,9 +42,13 @@ plan before writing any code.
   guardrail, and per-stage logging.
 - Added `src/app.py` — a Streamlit UI with a RAG tab, a manual-profile tab, a
   transparency panel, and a deterministic-vs-RAG comparison view.
-- Added `tests/test_rag.py` (mocked Anthropic client) and expanded
+- Added `tests/test_rag.py` (mocked Gemini client) and expanded
   `tests/test_recommender.py` with scoring-correctness and OOP/functional
   parity tests. Updated `requirements.txt` and the docs.
+- Later swapped the LLM provider from Claude to Google Gemini: replaced the
+  `anthropic` SDK with `google-genai`, switched to `client.models.generate_content`
+  with a `response_json_schema` for structured output, and updated the mocked
+  test client and all docs to match.
 
 **What did you verify or fix manually?**
 
@@ -49,9 +58,14 @@ plan before writing any code.
 - The agent flagged something I hadn't noticed: my `Recommender` class methods
   were placeholder stubs and the starter tests were passing by accident. I had
   it fix that as part of the work.
-- The live LLM path needs my own `ANTHROPIC_API_KEY`, which wasn't available in
+- The live LLM path needs my own `GEMINI_API_KEY`, which wasn't available in
   the agent's environment — so I verify that path myself by running the
   Streamlit app locally with my key set.
+- Running it live surfaced a real issue the mocked tests couldn't: `gemini-2.5-flash`
+  returned a 404 ("no longer available to new users"). The graceful fallback
+  kicked in as designed (deterministic results + a visible warning), and I had
+  the agent bump the default to the current GA model `gemini-3.6-flash` and add
+  a `python -m src.list_models` helper to list what my key can access.
 
 ---
 

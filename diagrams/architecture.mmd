@@ -13,13 +13,13 @@ flowchart TD
     M --> UI
 
     %% ---------------- Knowledge base ----------------
-    DB[("songs.csv<br/>18-song catalog<br/>= knowledge base")]
+    DB[("songs.csv<br/>30-song catalog<br/>= knowledge base")]
 
     %% ---------------- RAG pipeline (the agent) ----------------
     subgraph rag["RAG pipeline - src/rag.py"]
-        P["UNDERSTAND (agent)<br/>Claude parses request into a<br/>UserProfile using catalog-valid enums"]
+        P["UNDERSTAND (agent)<br/>Gemini parses request into a<br/>UserProfile using catalog-valid enums"]
         R["RETRIEVE (retriever)<br/>score_song / recommend_songs<br/>deterministic scorer ranks the catalog"]
-        G["GENERATE (agent)<br/>Claude writes a grounded recommendation<br/>using ONLY the retrieved songs"]
+        G["GENERATE (agent)<br/>Gemini writes a grounded recommendation<br/>using ONLY the retrieved songs"]
     end
 
     UI -->|"free-text path"| P
@@ -51,7 +51,7 @@ flowchart TD
     %% ---------------- Humans & testing ----------------
     subgraph verify["Humans & Testing"]
         H["Human review<br/>sets API key, reads recommendation,<br/>inspects parsed profile & retrieved songs"]
-        T["Automated tests (tester)<br/>pytest with a mocked Anthropic client<br/>tests/test_rag.py + tests/test_recommender.py"]
+        T["Automated tests (tester)<br/>pytest with a mocked Gemini client<br/>tests/test_rag.py + tests/test_recommender.py"]
     end
 
     OUT --> H

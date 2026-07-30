@@ -1,4 +1,4 @@
-anthropic
+google-genai
 pandas
 pytest
 python-dotenv

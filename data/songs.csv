@@ -17,3 +17,15 @@ id,title,artist,genre,mood,energy,tempo_bpm,valence,danceability,acousticness
 16,Neon Pulse Overdrive,Kilo Static,edm,euphoric,0.95,128,0.88,0.91,0.04
 17,Rainy Window Blues,Marcus Teel,blues,melancholic,0.31,68,0.30,0.42,0.68
 18,Block Party Anthem,Trey Nova,hip hop,triumphant,0.86,96,0.80,0.87,0.12
+19,Sun-faded Polaroid,Postcard Avenue,indie pop,nostalgic,0.58,108,0.63,0.66,0.42
+20,Highway Signal,Ridgeback,rock,moody,0.70,138,0.47,0.61,0.14
+21,Tidal Bloom,Orbit Bloom,ambient,peaceful,0.56,76,0.60,0.38,0.88
+22,Slow Dance Kitchen,Simone Bijoux,r&b,romantic,0.57,92,0.68,0.67,0.34
+23,Backroad Blues,Marcus Teel,blues,moody,0.55,84,0.42,0.51,0.60
+24,Downtown Deadline,Trey Nova,hip hop,focused,0.71,98,0.55,0.78,0.09
+25,Glass Elevator,Cassette Ghost,synthwave,sultry,0.62,112,0.52,0.72,0.21
+26,Mountain Morning,Rustwood Trio,folk,peaceful,0.56,88,0.62,0.44,0.82
+27,Backyard Fireflies,Hank Calloway,country,nostalgic,0.59,96,0.60,0.56,0.58
+28,Rooftop Jazz Night,The Blue Room,jazz,relaxed,0.60,96,0.66,0.62,0.55
+29,Neon Heartbeat,Kilo Static,edm,euphoric,0.74,124,0.85,0.88,0.05
+30,Cathedral of Steel,Iron Sable,metal,triumphant,0.90,160,0.55,0.58,0.04

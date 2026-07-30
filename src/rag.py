@@ -5,22 +5,24 @@ Pipeline
 --------
 1. **Understand** - a free-text request ("something upbeat for a late-night
    drive, nothing aggressive") is turned into a structured ``UserProfile`` by
-   Claude, using catalog-derived enums so the parsed genre/mood are guaranteed
+   Gemini, using catalog-derived enums so the parsed genre/mood are guaranteed
    to be vocabulary that actually exists in ``songs.csv``. This is the fix for
    the model card's "high-energy pop != pop" and "sad != melancholic" flaws.
 2. **Retrieve** - the parsed profile is fed to the *existing, deterministic*
    ``recommend_songs`` scorer to pull the top-k candidate songs. The catalog is
    the knowledge base; the scorer is the retriever.
-3. **Generate** - Claude writes a grounded, plain-language recommendation using
+3. **Generate** - Gemini writes a grounded, plain-language recommendation using
    *only* the retrieved songs' real attributes.
 
 Guardrails
 ----------
-- No ``ANTHROPIC_API_KEY`` / API error -> the whole thing degrades to the pure
+- No ``GEMINI_API_KEY`` / API error -> the whole thing degrades to the pure
   deterministic recommender, so the app and tests run with no key and no network.
-- Anti-hallucination check: any catalog song Claude names must be in the
+- Anti-hallucination check: any catalog song Gemini names must be in the
   retrieved set; otherwise it is flagged as a warning.
 - Every stage is logged (query -> profile -> retrieved -> model -> usage).
+
+Provider: Google Gemini via the ``google-genai`` SDK (``from google import genai``).
 """
 
 import json
@@ -33,7 +35,10 @@ from src.recommender import UserProfile, recommend_songs
 
 logger = logging.getLogger("music_recommender.rag")
 
-DEFAULT_MODEL = "claude-sonnet-5"
+# Current GA flash model (2026). If this is ever retired, set MODEL in the
+# sidebar or run `python -m src.list_models` to see what your key can access.
+# `gemini-flash-latest` is an alias that always points at the newest flash model.
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 
 # A scored, explained candidate: (song dict, score, reason string).
 ScoredSong = Tuple[Dict[str, Any], float, str]
@@ -88,8 +93,15 @@ def load_env() -> bool:
 
 
 def has_api_key(api_key: Optional[str] = None) -> bool:
-    """True when a usable API key is available (explicit or in the environment)."""
-    return bool(api_key or os.environ.get("ANTHROPIC_API_KEY"))
+    """True when a usable API key is available (explicit or in the environment).
+
+    The google-genai SDK reads either ``GEMINI_API_KEY`` or ``GOOGLE_API_KEY``.
+    """
+    return bool(
+        api_key
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -142,26 +154,27 @@ def parse_query_to_profile(
     vocab: Dict[str, List[str]],
     model: str = DEFAULT_MODEL,
 ) -> Tuple[UserProfile, Dict[str, int], str]:
-    """Call Claude to turn free text into a catalog-valid ``UserProfile``.
+    """Call Gemini to turn free text into a catalog-valid ``UserProfile``.
 
     Returns (profile, usage, notes). Raises on API error so the caller can
     decide to fall back.
     """
-    response = client.messages.create(
+    response = client.models.generate_content(
         model=model,
-        max_tokens=512,
-        thinking={"type": "disabled"},
-        system=(
-            "You extract structured music-taste preferences from a listener's "
-            "free-text request. You only ever use the catalog vocabulary given "
-            "to you. You respond with the requested JSON and nothing else."
-        ),
-        messages=[{"role": "user", "content": _parse_prompt(query, vocab)}],
-        output_config={"format": {"type": "json_schema", "schema": _profile_schema(vocab)}},
+        contents=_parse_prompt(query, vocab),
+        config={
+            "system_instruction": (
+                "You extract structured music-taste preferences from a "
+                "listener's free-text request. You only ever use the catalog "
+                "vocabulary given to you. You respond with the requested JSON "
+                "and nothing else."
+            ),
+            "response_mime_type": "application/json",
+            "response_json_schema": _profile_schema(vocab),
+        },
     )
 
-    text = next((b.text for b in response.content if b.type == "text"), "{}")
-    data = json.loads(text)
+    data = json.loads(response.text or "{}")
 
     profile = UserProfile(
         favorite_genre=data.get("favorite_genre"),
@@ -243,20 +256,20 @@ def generate_recommendation(
     retrieved: List[ScoredSong],
     model: str = DEFAULT_MODEL,
 ) -> Tuple[str, Dict[str, int]]:
-    """Call Claude to write a grounded blurb over the retrieved songs."""
-    response = client.messages.create(
+    """Call Gemini to write a grounded blurb over the retrieved songs."""
+    response = client.models.generate_content(
         model=model,
-        max_tokens=700,
-        thinking={"type": "disabled"},
-        system=(
-            "You are a music recommendation assistant. You recommend only from "
-            "the songs provided in the user's message and ground every claim in "
-            "their listed attributes. You never invent songs or attributes."
-        ),
-        messages=[{"role": "user", "content": _generation_prompt(query, retrieved)}],
+        contents=_generation_prompt(query, retrieved),
+        config={
+            "system_instruction": (
+                "You are a music recommendation assistant. You recommend only "
+                "from the songs provided in the user's message and ground every "
+                "claim in their listed attributes. You never invent songs or "
+                "attributes."
+            ),
+        },
     )
-    text = "".join(b.text for b in response.content if b.type == "text").strip()
-    return text, _usage_dict(response)
+    return (response.text or "").strip(), _usage_dict(response)
 
 
 # --------------------------------------------------------------------------- #
@@ -288,12 +301,12 @@ def check_hallucination(
 
 
 def _usage_dict(response: Any) -> Dict[str, int]:
-    usage = getattr(response, "usage", None)
+    usage = getattr(response, "usage_metadata", None)
     if usage is None:
         return {}
     return {
-        "input_tokens": getattr(usage, "input_tokens", 0) or 0,
-        "output_tokens": getattr(usage, "output_tokens", 0) or 0,
+        "input_tokens": getattr(usage, "prompt_token_count", 0) or 0,
+        "output_tokens": getattr(usage, "candidates_token_count", 0) or 0,
     }
 
 
@@ -310,10 +323,14 @@ def _deterministic_blurb(retrieved: List[ScoredSong]) -> str:
 
 
 def build_client(api_key: Optional[str] = None) -> Any:
-    """Construct an Anthropic client (imported lazily so the SDK is optional)."""
-    import anthropic  # noqa: WPS433 (intentional lazy import)
+    """Construct a Gemini client (imported lazily so the SDK is optional).
 
-    return anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+    With no explicit key, the SDK reads ``GEMINI_API_KEY`` / ``GOOGLE_API_KEY``
+    from the environment.
+    """
+    from google import genai  # noqa: WPS433 (intentional lazy import)
+
+    return genai.Client(api_key=api_key) if api_key else genai.Client()
 
 
 # --------------------------------------------------------------------------- #

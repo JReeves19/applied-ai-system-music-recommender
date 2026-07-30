@@ -6,8 +6,8 @@ Run from the repo root:
     streamlit run src/app.py
 
 The app has two entry points:
-- **Describe your vibe** (RAG): free text -> Claude parses a profile -> the
-  deterministic scorer retrieves songs -> Claude writes a grounded blurb.
+- **Describe your vibe** (RAG): free text -> Gemini parses a profile -> the
+  deterministic scorer retrieves songs -> Gemini writes a grounded blurb.
 - **Manual profile**: sliders/dropdowns that drive the deterministic scorer
   directly, with no LLM involved.
 
@@ -36,7 +36,7 @@ from src.rag import (
 )
 
 logging.basicConfig(level=logging.INFO)
-load_env()  # pick up ANTHROPIC_API_KEY from a repo-root .env if present
+load_env()  # pick up GEMINI_API_KEY from a repo-root .env if present
 
 DATA_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "songs.csv"
@@ -64,14 +64,14 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Settings")
-        model = st.text_input("Claude model", value=DEFAULT_MODEL)
+        model = st.text_input("Gemini model", value=DEFAULT_MODEL)
         k = st.slider("How many songs to retrieve", 1, 10, 5)
         key_present = has_api_key()
         if key_present:
-            st.success("ANTHROPIC_API_KEY detected — RAG enabled.")
+            st.success("GEMINI_API_KEY detected — RAG enabled.")
         else:
             st.warning(
-                "No ANTHROPIC_API_KEY found. The app still works — it falls "
+                "No GEMINI_API_KEY found. The app still works — it falls "
                 "back to the deterministic recommender (no AI text)."
             )
         st.caption(f"Catalog: {len(songs)} songs, "
@@ -84,8 +84,8 @@ def main() -> None:
     # --------------------------------------------------------------------- #
     with tab_rag:
         st.write(
-            "Describe what you want in plain language. Claude maps it onto the "
-            "catalog's vocabulary, the scorer retrieves matches, and Claude "
+            "Describe what you want in plain language. Gemini maps it onto the "
+            "catalog's vocabulary, the scorer retrieves matches, and Gemini "
             "explains the picks using only those songs."
         )
         query = st.text_input(
